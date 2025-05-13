@@ -17,6 +17,6 @@ spec:
     spec:
       containers:
         - name: my-go-app
-          image: docker.io/app/abhay3802/my-go-app
+          image: docker.io/abhay3802/my-go-app:v1
           ports:
             - containerPort: 8080

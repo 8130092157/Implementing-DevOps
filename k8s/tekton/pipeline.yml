@@ -32,57 +32,5 @@ spec:
           value: A push happened in $(params.repository)
 
 
----
-apiVersion: triggers.tekton.dev/v1alpha1
-kind: EventListener
-metadata:
-  name: listener
-spec:
-  serviceAccountName: tekton-triggers-example-sa
-  triggers:
-    - name: trigger
-      bindings:
-        - ref: event-binding
-      template:
-        ref: commit-tt
-      interceptors:
-        - github:
-            secretRef:
-              secretName: git-secret
-              secretKey: secretToken
-            eventTypes:
-              - push
-
----
-apiVersion: triggers.tekton.dev/v1alpha1
-kind: TriggerBinding
-metadata:
-  name: event-binding
-spec:
-  params:
-    - name: gitrepositoryurl
-      value: $(body.repository.url)
-
----
-apiVersion: triggers.tekton.dev/v1alpha1
-kind: TriggerTemplate
-metadata:
-  name: commit-tt
-spec:
-  params:
-    - name: gitrepositoryurl
-      description: The git repository url
-  resourcetemplates:
-    - apiVersion: tekton.dev/v1beta1
-      kind: PipelineRun
-      metadata:
-        generateName: something-pushed-
-      spec:
-        pipelineRef:
-          name: something-pushed
-        params:
-          - name: repository
-            value: $(tt.params.gitrepositoryurl)
-
 
 

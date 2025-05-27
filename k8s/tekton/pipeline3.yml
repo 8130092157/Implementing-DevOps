@@ -1,0 +1,70 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: clone-build-push-kaniko
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: image-name
+      type: string
+    - name: image-tag
+      type: string
+  workspaces:
+    - name: source
+    - name: docker-config
+  steps:
+    - name: clone-repo
+      image: alpine/git
+      workingDir: /workspace/source
+      script: |
+        #!/bin/sh
+        echo "Cleaning workspace..."
+        find . -mindepth 1 -delete
+        echo "Cloning repository..."
+        git clone "$(params.repo-url)" .
+
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:latest
+      workingDir: /workspace/source
+      args:
+        - "--dockerfile=Dockerfile"
+        - "--destination=$(params.image-name):$(params.image-tag)"
+        - "--context=dir:///workspace/source"
+      env:
+        - name: DOCKER_CONFIG
+          value: /workspace/docker-config
+
+
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: pipeline-clone-build-push-kaniko
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: image-name
+      type: string
+    - name: image-tag
+      type: string
+  workspaces:
+    - name: source
+    - name: docker-config
+  tasks:
+    - name: clone-build-push-task
+      taskRef:
+        name: clone-build-push-kaniko
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: image-name
+          value: $(params.image-name)
+        - name: image-tag
+          value: $(params.image-tag)
+      workspaces:
+        - name: source
+          workspace: source
+        - name: docker-config
+          workspace: docker-config

@@ -1,0 +1,24 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: run-clone-build-push-001
+spec:
+  pipelineRef:
+    name: pipeline-clone-build-push-kaniko
+  params:
+    - name: repo-url
+      value: https://github.com/8130092157/Implementing-DevOps.git
+    - name: image-name
+      value: docker.io/abhay3802/demo999
+    - name: image-tag
+      value: latest
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: source-pvc
+    - name: docker-config
+      secret:
+        secretName: dockerhub-secret
+        items:
+          - key: .dockerconfigjson
+            path: config.json

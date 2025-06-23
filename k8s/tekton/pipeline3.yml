@@ -1,70 +1,91 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: clone-build-push-kaniko
+  name: build-and-push-with-ca
+  namespace: privileged-pods
 spec:
   params:
-    - name: repo-url
-      type: string
-    - name: image-name
-      type: string
-    - name: image-tag
-      type: string
+    - name: git-url
+    - name: git-revision
+      default: main
+    - name: image-url
   workspaces:
     - name: source
-    - name: docker-config
   steps:
-    - name: clone-repo
-      image: alpine/git
-      workingDir: /workspace/source
+    - name: update-ca
+      image: debian:bullseye
       script: |
-        #!/bin/sh
-        echo "Cleaning workspace..."
-        find . -mindepth 1 -delete
-        echo "Cloning repository..."
-        git clone "$(params.repo-url)" .
-
-    - name: build-and-push
-      image: gcr.io/kaniko-project/executor:latest
-      workingDir: /workspace/source
-      args:
-        - "--dockerfile=Dockerfile"
-        - "--destination=$(params.image-name):$(params.image-tag)"
-        - "--context=dir:///workspace/source"
+        #!/bin/bash
+        set -e
+        apt-get update && apt-get install -y ca-certificates git
+        mkdir -p /usr/local/share/ca-certificates
+        cp /certs/ca-cert.crt /usr/local/share/ca-certificates/ca-cert.crt
+        update-ca-certificates
+      volumeMounts:
+        - name: cert-volume
+          mountPath: /certs
+    - name: clone
+      image: alpine/git
+      script: |
+        git clone $(params.git-url) --branch $(params.git-revision) $(workspaces.source.path)
+    - name: buildah
+      image: quay.io/buildah/stable
+      securityContext:
+        privileged: true
+      script: |
+        set -e
+        cd $(workspaces.source.path)
+        echo "Logging into Quay..."
+        buildah login --tls-verify=true -u $QUAY_USER -p $QUAY_PASSWORD quay-nonprod.elevancehealth.com
+        echo "Building image..."
+        buildah bud --tls-verify=true -t $(params.image-url) .
+        echo "Pushing image..."
+        buildah push --tls-verify=true $(params.image-url)
       env:
-        - name: DOCKER_CONFIG
-          value: /workspace/docker-config
-
+        - name: QUAY_USER
+          valueFrom:
+            secretKeyRef:
+              name: quay-auth-token
+              key: user
+        - name: QUAY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: quay-auth-token
+              key: password
+      volumeMounts:
+        - name: cert-volume
+          mountPath: /etc/ssl/certs
+  volumes:
+    - name: cert-volume
+      configMap:
+        name: dummy-ca-cert
 
 ---
-apiVersion: tekton.dev/v1beta1
+
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
-  name: pipeline-clone-build-push-kaniko
+  name: build-and-push-pipeline
+  namespace: privileged-pods
 spec:
   params:
-    - name: repo-url
-      type: string
-    - name: image-name
-      type: string
-    - name: image-tag
-      type: string
+    - name: git-url
+    - name: git-revision
+      default: main
+    - name: image-url
   workspaces:
-    - name: source
-    - name: docker-config
+    - name: shared-workspace
   tasks:
-    - name: clone-build-push-task
+    - name: build-and-push
       taskRef:
-        name: clone-build-push-kaniko
+        name: build-and-push-with-ca
       params:
-        - name: repo-url
-          value: $(params.repo-url)
-        - name: image-name
-          value: $(params.image-name)
-        - name: image-tag
-          value: $(params.image-tag)
+        - name: git-url
+          value: $(params.git-url)
+        - name: git-revision
+          value: $(params.git-revision)
+        - name: image-url
+          value: $(params.image-url)
       workspaces:
         - name: source
-          workspace: source
-        - name: docker-config
-          workspace: docker-config
+          workspace: shared-workspace

@@ -1,24 +1,25 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: run-clone-build-push-001
+  name: run-build-and-push
+  namespace: privileged-pods
 spec:
   pipelineRef:
-    name: pipeline-clone-build-push-kaniko
+    name: build-and-push-pipeline
   params:
-    - name: repo-url
+    - name: git-url
       value: https://github.com/8130092157/Implementing-DevOps.git
-    - name: image-name
-      value: docker.io/abhay3802/demo999
-    - name: image-tag
-      value: latest
+    - name: git-revision
+      value: main
+    - name: image-url
+      value: quay-nonprod.elevancehealth.com/an983995ad/demo:abhay
   workspaces:
-    - name: source
-      persistentVolumeClaim:
-        claimName: source-pvc
-    - name: docker-config
-      secret:
-        secretName: dockerhub-secret
-        items:
-          - key: .dockerconfigjson
-            path: config.json
+    - name: shared-workspace
+      volumeClaimTemplate:
+        metadata:
+          name: shared-pvc
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 1Gi

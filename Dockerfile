@@ -6,7 +6,7 @@ ENV PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
 
 RUN apt-get update && apt-get install -y curl
 
-RUN curl -LO https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
+RUN curl -k -LO https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && \
     rm go${GO_VERSION}.linux-amd64.tar.gz
 
